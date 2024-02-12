@@ -66,6 +66,8 @@ __attribute__((weak)) leds_t leds_getState (void) { leds_t leds = {0}; return le
 __attribute__((weak)) void navigator_setLimits (int16_t min, int16_t max) {};
 
 __attribute__((weak)) void mpg_setActiveAxis (uint_fast8_t axis) {};
+__attribute__((weak)) void mpg_ActiveAxisUpdated (uint_fast8_t axis) {};
+__attribute__((weak)) void mpg_JogRateToggle (uint_fast8_t axis) {};
 __attribute__((weak)) mpg_t *mpg_getPosition (void) { static mpg_t mpg = {0}; return &mpg; };
 __attribute__((weak)) void mpg_reset (void) {};
 __attribute__((weak)) void mpg_setCallback (on_mpgChanged_ptr fn) {};

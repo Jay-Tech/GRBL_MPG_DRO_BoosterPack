@@ -123,7 +123,7 @@ settings_t settings = {
 
 static grbl_info_t grbl_info = {
     .options = {0},
-    .device  = "grblHAL MPG & DRO",
+    .device  = "grblHAL MPG",
 };
 
 static struct {

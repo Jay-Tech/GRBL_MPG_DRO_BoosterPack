@@ -55,7 +55,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static qei_t qei = {0}, qei_mpg;
 static mpg_t mpg = {0};
 static mpg_axis_t *mpg_axis;
-
 static leds_t leds_state = {
     .value = 255
 };
@@ -63,7 +62,9 @@ static bool keyDown = false;
 static void encoder_int_handler (void);
 static void mpg_int_handler (void);
 static void keyclick_int_handler (uint gpio, uint32_t events);
-static void nav_sw_int_handler (uint gpio, uint32_t events);
+static void mpgMode_sw_int_handler (uint gpio, uint32_t events);
+static void axis_toggle_int_handler (uint gpio, uint32_t events);
+static void jog_rate_int_handler (uint gpio, uint32_t events);
 static void gpio_int_handler (uint gpio, uint32_t events);
 
 static int enc_sm, mpg_sm;
@@ -75,6 +76,9 @@ static const uint32_t STATE_A_MASK      = 0x80000000;
 static const uint32_t STATE_B_MASK      = 0x40000000;
 static const uint32_t STATE_A_LAST_MASK = 0x20000000;
 static const uint32_t STATE_B_LAST_MASK = 0x10000000;
+
+static const uint8_t Maxium = 3;
+uint_fast8_t current = 0;
 
 #define STATES_MASK (STATE_A_MASK | STATE_B_MASK | STATE_A_LAST_MASK | STATE_B_LAST_MASK);
 
@@ -106,12 +110,20 @@ void hal_init (void)
 
     i2c_nb_init();
 
-    gpio_set_irq_enabled_with_callback(NAVIGATOR_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, gpio_int_handler);
-    gpio_pull_up(NAVIGATOR_SW_PIN);
-    gpio_set_irq_enabled(NAVIGATOR_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
-
     gpio_pull_up(KEYINTR_PIN);
     gpio_set_irq_enabled_with_callback(KEYINTR_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, gpio_int_handler);
+
+    gpio_set_irq_enabled_with_callback(MPGMODE_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, gpio_int_handler);
+    gpio_pull_up(MPGMODE_SW_PIN);
+    gpio_set_irq_enabled(MPGMODE_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
+
+    gpio_set_irq_enabled_with_callback(JOG_RATE_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, gpio_int_handler);
+    gpio_pull_up(JOG_RATE_PIN);
+    gpio_set_irq_enabled(JOG_RATE_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
+    
+    gpio_set_irq_enabled_with_callback(AXIS_TOGGLE_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, gpio_int_handler);
+    gpio_pull_up(AXIS_TOGGLE_PIN);
+    gpio_set_irq_enabled(AXIS_TOGGLE_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
 
     gpio_init(KEYFWD_PIN);
     gpio_set_oeover(KEYFWD_PIN, GPIO_OVERRIDE_LOW); // > to OD // GPIO_OVERRIDE_INVERT does not work!
@@ -278,6 +290,7 @@ void mpg_setActiveAxis (uint_fast8_t axis)
         default:
             break;
     }
+   mpg_ActiveAxisUpdated(axis);
 }
 
 mpg_t *mpg_getPosition (void)
@@ -311,8 +324,20 @@ static void gpio_int_handler (uint gpio, uint32_t events)
             keyclick_int_handler(gpio, events);
             break;
 
-        case NAVIGATOR_SW_PIN:
-            nav_sw_int_handler(gpio, events);
+        // case NAVIGATOR_SW_PIN:
+        //     nav_sw_int_handler(gpio, events);
+        //     break;
+
+        case MPGMODE_SW_PIN:
+            mpgMode_sw_int_handler(gpio, events);
+            break;
+            
+        case JOG_RATE_PIN:
+            jog_rate_int_handler(gpio, events);
+            break;
+
+        case AXIS_TOGGLE_PIN:
+            axis_toggle_int_handler(gpio, events);
             break;
 
         default:
@@ -341,25 +366,78 @@ static void keyclick_int_handler (uint gpio, uint32_t events)
     }
 }
 
-static int64_t debounce_callback (alarm_id_t id, void *state)
-{
-    if(interface.on_navigator_event && gpio_get(NAVIGATOR_SW_PIN) == *(bool *)state)
-        interface.on_navigator_event(gpio_get(NAVIGATOR_SW_PIN) ? WIDGET_MSG_PTR_UP : WIDGET_MSG_PTR_DOWN, qei_xPos, qei.count);
+// static int64_t debounce_callback (alarm_id_t id, void *state)
+// {
+//     if(interface.on_navigator_event && gpio_get(NAVIGATOR_SW_PIN) == *(bool *)state)
+//         interface.on_navigator_event(gpio_get(NAVIGATOR_SW_PIN) ? WIDGET_MSG_PTR_UP : WIDGET_MSG_PTR_DOWN, qei_xPos, qei.count);
 
-    gpio_set_irq_enabled(NAVIGATOR_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
+//     gpio_set_irq_enabled(NAVIGATOR_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
+
+//     return 0;
+// }
+static int64_t debounceMode_callback (alarm_id_t id, void *pin)
+{
+    gpio_set_irq_enabled(*(uint *)pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
 
     return 0;
 }
 
-static void nav_sw_int_handler (uint gpio, uint32_t events)
+static void mpgMode_sw_int_handler (uint gpio, uint32_t events)
 {
     static bool state;
-
-    state = events == GPIO_IRQ_EDGE_RISE;
-
-    gpio_set_irq_enabled(NAVIGATOR_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
-    add_alarm_in_ms(40, debounce_callback, &state, false);
+    state = events == GPIO_IRQ_EDGE_RISE ;
+    static uint pin;
+    pin = gpio;
+    if(!state)
+    {
+         serial_putC(CMD_MPG_MODE_TOGGLE);
+    }
+    
+    gpio_set_irq_enabled(MPGMODE_SW_PIN,  GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+    add_alarm_in_ms(40, debounceMode_callback, &pin, false);
 }
+
+static void jog_rate_int_handler (uint gpio, uint32_t events)
+{
+    static bool state;
+    state = events == GPIO_IRQ_EDGE_RISE ;
+    static uint pin;
+    pin = gpio;
+
+    if(!state)
+    {
+        current = current == Maxium ? 0 : current + 1;
+       mpg_JogRateToggle(current);
+    }
+    gpio_set_irq_enabled(JOG_RATE_PIN,  GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+    add_alarm_in_ms(40, debounceMode_callback, &pin, false);
+}
+
+static void axis_toggle_int_handler (uint gpio, uint32_t events)
+{
+     static bool state;
+    state = events == GPIO_IRQ_EDGE_RISE ;
+    static uint pin;
+    pin = gpio;
+    if(!state)
+    {
+        if(mpg_axis  == &mpg.x)
+        {
+        mpg_setActiveAxis(1);
+        }
+        else if(mpg_axis == &mpg.y)
+        {
+         mpg_setActiveAxis(2);
+        }
+        else{
+        mpg_setActiveAxis(0);
+        }
+    }
+    gpio_set_irq_enabled(AXIS_TOGGLE_PIN,  GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+    add_alarm_in_ms(40, debounceMode_callback, &pin, false);
+}
+
+
 
 const uint8_t encoder_valid_state[] = {0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
 

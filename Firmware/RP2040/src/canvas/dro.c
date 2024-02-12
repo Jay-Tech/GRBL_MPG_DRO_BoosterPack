@@ -101,19 +101,19 @@ typedef struct {
 //
 
 const char *const jogModeStr[] = { "Fast", "Slow", "Step"};
-const float mpgFactors[2] = {1.0f, 10.0f};
+const float mpgFactors[4] = {1.0f, 10.0f, 25.0f, 50.0f};
 
 //
 
 volatile uint_fast8_t event = 0;
 static uint_fast8_t mpg_axis = X_AXIS;
-static float mpg_rpm = 200.0f;
+static float mpg_rpm = 000.0f;
 static bool mpgMove = false, endMove = false;
 static bool jogging = false, keyreleased = true, disableMPG = false, mpgReset = false, active = false;
 static bool isLathe = false;
 static float angle = 0.0f;
 static uint32_t nav_midpos = 0;
-static jogmode_t jogMode = JogMode_Slow;
+static jogmode_t jogMode = JogMode_Fast;
 static event_counters_t event_count;
 static grbl_data_t *grbl_data = NULL;
 static Canvas *canvasMain = 0;
@@ -311,7 +311,16 @@ static void displayMPGFactor (uint_fast8_t i, uint_fast8_t mpg_idx)
         drawString(font_23x16, 269, axis[i].row - 10, buf, false);
     }
 }
-
+void mpg_JogRateToggle(uint_fast8_t rate)
+{
+    for(uint_fast8_t i = 0; i < 3; i++) 
+    {
+        if(axis[i].visible) 
+        {               
+             displayMPGFactor(i, rate);
+        }
+    }
+}
 static void displayJogMode (jogmode_t jogMode)
 {
     lblJogMode->widget.fgColor = jogMode == JogMode_Fast ? Red : White;
@@ -647,6 +656,15 @@ static void processKeypress (void)
     }
 }
 
+void mpg_ActiveAxisUpdated(uint_fast8_t axis_t)
+{
+    for(uint_fast8_t i = 0; i < 3; i++) {
+                if(axis[i].visible) {
+                    axis[i].lblAxis->widget.fgColor = i == axis_t ? Green : White;
+                    UILibLabelDisplay(axis[i].lblAxis, axis[i].label);
+                }
+            }
+}
 void keyEvent (bool keyDown, char key)
 {
     // NOTE: key is read from input buffer during event processing

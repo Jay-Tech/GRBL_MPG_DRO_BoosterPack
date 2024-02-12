@@ -41,36 +41,37 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef _DRIVER_H_
 #define _DRIVER_H_
 
-#define KEYFWD_PIN          11
-#define KEYINTR_PIN         5
-#define MASTER_I2C_PORT     1
-#define MASTER_SDA_PIN      26
+#define X_AXIS 0
+#define Y_AXIS 1
+#define Z_AXIS 2
+
+#define SWD_TEST            28
 #define MASTER_SCL_PIN      27
-
-#define SLAVE_I2C_PORT      0
-#define SLAVE_SDA_PIN       8
-#define SLAVE_SCL_PIN       9
-
-#define NAVIGATOR_A         14
-#define NAVIGATOR_B         15
-#define NAVIGATOR_SW_PIN    10
-
-#define MPG_A               20
+#define MASTER_SDA_PIN      26
+#define SWD_RESET           22
 #define MPG_B               21
-
-// GPIO
-
+#define MPG_A               20
+// GPIO 7, 16-19 LCD Display 
+#define NAVIGATOR_B         15
+#define NAVIGATOR_A         14
+#define UART_RX_PIN         13
+#define UART_TX_PIN         12
+// #define KEYFWD_PIN          11
+// #define NAVIGATOR_SW_PIN    10
+#define AXIS_TOGGLE_PIN     11
+#define JOG_RATE_PIN        10
+#define SLAVE_SCL_PIN       9
+#define SLAVE_SDA_PIN       8
+#define MPGMODE_SW_PIN      6
+#define KEYINTR_PIN         5
 #define SPINDLEDIR_PIN      4 // GPIO0 / Touch IRQ
 #define MPG_MODE_PIN        3 // GPIO1
-#define GPIO2_PIN           2 // GPIO2
-
-// GRBL SIGNALS
-
-#define CYCLESTART_PIN      0
+#define KEYFWD_PIN          2 // GPIO2
 #define FEEDHOLD_PIN        1
+#define CYCLESTART_PIN      0
 
-#define UART_TX_PIN         12
-#define UART_RX_PIN         13
+#define MASTER_I2C_PORT     1
+#define SLAVE_I2C_PORT      0
 
 #ifndef UART_PORT
 #define UART_PORT           uart0
@@ -78,8 +79,5 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 // MSP430 SWD
-
-#define SWD_RESET           22
-#define SWD_TEST            28
 
 #endif

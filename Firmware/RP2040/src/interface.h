@@ -114,6 +114,8 @@ extern leds_t leds_getState (void);
 extern void navigator_setLimits (int16_t min, int16_t max);
 
 extern void mpg_setActiveAxis (uint_fast8_t axis);
+extern void mpg_ActiveAxisUpdated (uint_fast8_t axis);
+extern void mpg_JogRateToggle (uint_fast8_t axis);
 extern mpg_t *mpg_getPosition (void);
 extern void mpg_reset (void);
 extern void mpg_setCallback (on_mpgChanged_ptr fn);
