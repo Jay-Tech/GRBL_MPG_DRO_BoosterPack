@@ -97,9 +97,9 @@ static void sendGCode (bool ok, grbl_data_t *grbl_data)
 
     if(grbl_data->changed.state) {
 
-        leds.run = grbl_data->grbl.state == Run || grbl_data->grbl.state == Jog;
-        leds.hold = grbl_data->grbl.state == Hold;
-        leds_setState(leds);
+        // leds.run = grbl_data->grbl.state == Run || grbl_data->grbl.state == Jog;
+        // leds.hold = grbl_data->grbl.state == Hold;
+        // leds_setState(leds);
 
         if(jobState == JobComplete && grbl_data->grbl.state == Idle)
             UILibCanvasDisplay(canvasPrevious);
@@ -108,7 +108,8 @@ static void sendGCode (bool ok, grbl_data_t *grbl_data)
 
     }
 
-    if(grbl_data->grbl.state == Run) {
+    if(grbl_data->grbl.state == Run) 
+    {
 
         if(grbl_data->changed.message)
             UILibLabelDisplay(lblPass, grbl_data->message);
@@ -123,12 +124,12 @@ static void sendGCode (bool ok, grbl_data_t *grbl_data)
             UILibLabelDisplay(lblZPos, grbl_data->block);
         }
 
-        if(grbl_data->changed.leds) {
-            leds.mist = grbl_data->coolant.mist;
-            leds.flood = grbl_data->coolant.flood;
-            leds.spindle = grbl_data->spindle.on;
-            leds_setState(leds);
-        }
+        // if(grbl_data->changed.leds) {
+        //     leds.mist = grbl_data->coolant.mist;
+        //     leds.flood = grbl_data->coolant.flood;
+        //     leds.spindle = grbl_data->spindle.on;
+        //     leds_setState(leds);
+        // }
 
         grbl_data->changed.flags = 0;
     }

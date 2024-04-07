@@ -174,7 +174,7 @@ void GRBLUtilsShowCanvas (void)
     canvasPrevious = UILibCanvasGetCurrent();
 
     UILibCanvasDisplay(canvasUtils);
-    grbl_data = setGrblReceiveCallback(showResponse);
+    //grbl_data = setGrblReceiveCallback(showResponse);
     setColor(White);
     drawStringAligned(font_23x16, 0, 22, "grbl Utilities", Align_Center, 320, false);
 }

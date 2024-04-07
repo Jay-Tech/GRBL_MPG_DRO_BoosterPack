@@ -101,7 +101,8 @@ typedef struct {
 //
 
 const char *const jogModeStr[] = { "Fast", "Slow", "Step"};
-const float mpgFactors[4] = {1.0f, 10.0f, 25.0f, 50.0f};
+//const float mpgFactors[4] = {1.0f, 10.0f, 25.0f, 50.0f};
+const float mpgFactors[4] = {0.1, 1.0, 2.0, 5.0};
 
 //
 
@@ -117,7 +118,7 @@ static jogmode_t jogMode = JogMode_Fast;
 static event_counters_t event_count;
 static grbl_data_t *grbl_data = NULL;
 static Canvas *canvasMain = 0;
-static Label *lblDevice, *lblResponseL = NULL, *lblResponseR = NULL, *lblGrblState = NULL, *lblPinState = NULL, *lblFeedRate = NULL, *lblRPM = NULL, *lblJogMode = NULL;
+static Label *lblDevice, *lblResponseL = NULL, *lblResponseR = NULL, *lblGrblState = NULL, *lblPinState = NULL, *lblFeedRate = NULL, *lblRPM = NULL, *lblJogMode = NULL, *lblUnit = NULL;
 static lcd_display_t *screen;
 static settings_t *settings = NULL;
 static grbl_info_t *grbl_info = NULL;
@@ -186,7 +187,8 @@ static void MPG_ResetPosition (bool await)
     axis[X_AXIS].mpg_position = 0;
     axis[Y_AXIS].mpg_position = 0;
     axis[Z_AXIS].mpg_position = 0;
-    if(!(grbl_data->awaitWCO = await)) {
+    if(!(grbl_data->awaitWCO = await))
+     {
         axis[X_AXIS].mpg_base = grbl_data->position[X_AXIS];
         axis[Y_AXIS].mpg_base = grbl_data->position[Y_AXIS];
         axis[Z_AXIS].mpg_base = grbl_data->position[Z_AXIS];
@@ -205,11 +207,54 @@ static bool MPG_Move (void)
         return false;
 
     strcpy(buffer, "G1");
-
+    settings->jog_config.report_inches ? strcpy(buffer, "G20") : strcpy(buffer, "G21");
     pos = mpg_getPosition();
 
-    if(!axis[Z_AXIS].dro_lock) {
-        if(pos->z.position != axis[Z_AXIS].mpg_position) {
+
+    if(!axis[X_AXIS].dro_lock)
+     {
+        if(pos->x.position != axis[X_AXIS].mpg_position)
+         {
+            delta_x = (float)(pos->x.position - axis[X_AXIS].mpg_position) * axis[X_AXIS].mpg_factor / 400.0f;
+            axis[X_AXIS].mpg_position = pos->x.position;
+            velocity = velocity == 0 ? pos->x.velocity : MIN(pos->x.velocity, velocity);
+        } 
+        else if(angle != 0.0f)
+            delta_x = delta_z * angle;
+
+        if(delta_x != 0.0)
+         {
+            if(grbl_data->absDistance)
+            {
+                axis[X_AXIS].mpg_base += delta_x;
+            }
+            
+            sprintf(append(buffer), "X%.3f", grbl_data->absDistance ? axis[X_AXIS].mpg_base  - grbl_data->offset[X_AXIS]: delta_x);
+        }
+    }
+
+    if(!axis[Y_AXIS].dro_lock) 
+    {
+        if(pos->y.position != axis[Y_AXIS].mpg_position)
+         {
+            delta_y = (float)(pos->y.position - axis[Y_AXIS].mpg_position) * axis[Y_AXIS].mpg_factor / 400.0f;
+            axis[Y_AXIS].mpg_position = pos->y.position;
+            velocity = velocity == 0 ? pos->y.velocity : MIN(pos->y.velocity, velocity);
+        }
+
+        if(delta_y != 0.0f) 
+        {
+            if(grbl_data->absDistance)
+                axis[Y_AXIS].mpg_base += delta_y;
+            sprintf(append(buffer), "Y%.3f", grbl_data->absDistance ? axis[Y_AXIS].mpg_base    - grbl_data->offset[Y_AXIS] : delta_y);
+        }
+    }
+
+    
+    if(!axis[Z_AXIS].dro_lock) 
+    {
+        if(pos->z.position != axis[Z_AXIS].mpg_position) 
+        {
             delta_z = (float)(pos->z.position - axis[Z_AXIS].mpg_position) * axis[Z_AXIS].mpg_factor / 400.0f;
             axis[Z_AXIS].mpg_position = pos->z.position;
             if(grbl_data->absDistance)
@@ -219,43 +264,25 @@ static bool MPG_Move (void)
         }
     }
 
-    if(!axis[X_AXIS].dro_lock) {
-        if(pos->x.position != axis[X_AXIS].mpg_position) {
-            delta_x = (float)(pos->x.position - axis[X_AXIS].mpg_position) * axis[X_AXIS].mpg_factor / 400.0f;
-            axis[X_AXIS].mpg_position = pos->x.position;
-            velocity = velocity == 0 ? pos->x.velocity : MIN(pos->x.velocity, velocity);
-        } else if(angle != 0.0f)
-            delta_x = delta_z * angle;
-
-        if(delta_x != 0.0f) {
-            if(grbl_data->absDistance)
-                axis[X_AXIS].mpg_base += delta_x;
-            sprintf(append(buffer), "X%.3f", grbl_data->absDistance ? axis[X_AXIS].mpg_base - grbl_data->offset[X_AXIS] : delta_x);
-        }
-    }
-
-    if(!axis[Y_AXIS].dro_lock) {
-        if(pos->y.position != axis[Y_AXIS].mpg_position) {
-            delta_y = (float)(pos->y.position - axis[Y_AXIS].mpg_position) * axis[Y_AXIS].mpg_factor / 400.0f;
-            axis[Y_AXIS].mpg_position = pos->y.position;
-            velocity = velocity == 0 ? pos->y.velocity : MIN(pos->y.velocity, velocity);
-        }
-
-        if(delta_y != 0.0f) {
-            if(grbl_data->absDistance)
-                axis[Y_AXIS].mpg_base += delta_y;
-            sprintf(append(buffer), "Y%.3f", grbl_data->absDistance ? axis[Y_AXIS].mpg_base - grbl_data->offset[Y_AXIS] : delta_y);
-        }
-    }
-
     if((updated = delta_x != 0.0f || delta_y != 0.0f || delta_z != 0.0f)) {
 
         sprintf(append(buffer), "F%d", velocity * 50);
         serial_writeLn(buffer);
 //        drawString(font_23x16, 5, 40, buffer, true);
-
+       
         setColor(Coral);
+        if(settings->jog_config.report_inches)
+        {
+         if(delta_x != 0.0f)
+            drawString(POSFONT, POSCOL, axis[X_AXIS].row, ftoa(axis[X_AXIS].mpg_base - grbl_data->offset[X_AXIS], "% 9.3f"), true);
 
+        if(delta_y != 0.0f)
+            drawString(POSFONT, POSCOL, axis[Y_AXIS].row, ftoa(axis[Y_AXIS].mpg_base  - grbl_data->offset[Y_AXIS], "% 9.3f"), true);
+
+        if(delta_z != 0.0f)
+            drawString(POSFONT, POSCOL, axis[Z_AXIS].row, ftoa(axis[Z_AXIS].mpg_base  - grbl_data->offset[Z_AXIS], "% 9.3f"), true);
+        }
+        else{
         if(delta_x != 0.0f)
             drawString(POSFONT, POSCOL, axis[X_AXIS].row, ftoa(axis[X_AXIS].mpg_base - grbl_data->offset[X_AXIS], "% 9.3f"), true);
 
@@ -264,13 +291,10 @@ static bool MPG_Move (void)
 
         if(delta_z != 0.0f)
             drawString(POSFONT, POSCOL, axis[Z_AXIS].row, ftoa(axis[Z_AXIS].mpg_base - grbl_data->offset[Z_AXIS], "% 9.3f"), true);
+        }
+        
 
         setColor(White);
-
-        if(!leds.run) {
-            leds.run = true;
-            leds_setState(leds);
-        }
     }
 
     return updated;
@@ -284,7 +308,8 @@ static void displayBanner (RGBColor_t color)
 
 static void displayPosition (uint_fast8_t i)
 {
-    if(axis[i].visible) {
+    if(axis[i].visible) 
+    {
         setColor(axis[i].dro_lock ? Yellow : White);
         drawString(POSFONT, POSCOL, axis[i].row, ftoa(grbl_data->position[i] - grbl_data->offset[i], "% 9.3f"), true);
         setColor(White);
@@ -306,8 +331,8 @@ static void displayMPGFactor (uint_fast8_t i, uint_fast8_t mpg_idx)
     axis[i].mpg_factor = mpgFactors[axis[i].mpg_idx];
 
     if(axis[i].visible) {
-        setMPGFactorBG(i, axis[i].mpg_factor == 1.0f ? Black : Red);
-        sprintf(buf, "x%d", (uint32_t)axis[i].mpg_factor);
+        setMPGFactorBG(i, axis[i].mpg_factor == 0.0 ? Black : Red);
+        sprintf(buf, "x%.1f", axis[i].mpg_factor);
         drawString(font_23x16, 269, axis[i].row - 10, buf, false);
     }
 }
@@ -339,323 +364,6 @@ static void driver_settings_restore (uint8_t restore_flag)
 
 }
 
-static void processKeypress (void)
-{
-    static char command[30];
-
-    bool addedGcode, jogCommand = false;
-    char keycode;
-
-    if(!(keycode = keypad_get_keycode()))
-        return;
-
-    if(grbl_data->alarm && !(keycode == 'H' || keycode == '\r'))
-        return;
-
-    command[0] = '\0';
-
-    switch(keycode) {
-
-        case '\r':
-            if(!grbl_data->mpgMode || grbl_data->grbl.state != Hold)
-                signal_setMPGMode(!grbl_data->mpgMode);
-            break;
-
-        case 'T':
-            mpg_axis = mpg_axis == Z_AXIS ? X_AXIS : mpg_axis + 1;
-            for(uint_fast8_t i = 0; i < 3; i++) {
-                if(axis[i].visible) {
-                    axis[i].lblAxis->widget.fgColor = i == mpg_axis ? Green : White;
-                    UILibLabelDisplay(axis[i].lblAxis, axis[i].label);
-                }
-            }
-            mpg_setActiveAxis(mpg_axis);
-            break;
-
-        case '4':
-            mpg_axis = X_AXIS;
-            for(uint_fast8_t i = 0; i < 3; i++) {
-                if(axis[i].visible) {
-                    axis[i].lblAxis->widget.fgColor = i == mpg_axis ? Green : White;
-                    UILibLabelDisplay(axis[i].lblAxis, axis[i].label);
-                }
-            }
-            mpg_setActiveAxis(mpg_axis);
-            break;
-
-        case '5':
-            mpg_axis = Y_AXIS;
-            for(uint_fast8_t i = 0; i < 3; i++) {
-                if(axis[i].visible) {
-                    axis[i].lblAxis->widget.fgColor = i == mpg_axis ? Green : White;
-                    UILibLabelDisplay(axis[i].lblAxis, axis[i].label);
-                }
-            }
-            mpg_setActiveAxis(mpg_axis);
-            break;
-
-        case '6':
-            mpg_axis = Z_AXIS;
-            for(uint_fast8_t i = 0; i < 3; i++) {
-                if(axis[i].visible) {
-                    axis[i].lblAxis->widget.fgColor = i == mpg_axis ? Green : White;
-                    UILibLabelDisplay(axis[i].lblAxis, axis[i].label);
-                }
-            }
-            mpg_setActiveAxis(mpg_axis);
-            break;
-
-        case 'P':
-        case 'S':                                   // Spindle
-            if(grbl_data->mpgMode)
-                if(grbl_data->grbl.state == Idle) {
-                    bool spindle_on = !grbl_data->spindle.on;
-                    if(spindle_on) {
-                        grbl_data->spindle.ccw = signal_getSpindleDir();
-                        if(mpg_rpm == 0)
-                            mpg_rpm = 400.0f;
-                    }
-                    strcpy(command, spindle_on ? (grbl_data->spindle.ccw ? "M4" : "M3") : "M5");
-                    if(spindle_on)
-                        sprintf(append(command), "S%d", (int32_t)mpg_rpm);
-                    serial_writeLn((char *)command);
-                    command[0] = '\0';
-                } else if(grbl_data->grbl.state == Hold || grbl_data->grbl.state == Door)
-                    serial_putC(CMD_OVERRIDE_SPINDLE_STOP);
-            break;
-
-        case 'M':                                   // Mist override
-            serial_putC(CMD_OVERRIDE_COOLANT_MIST_TOGGLE);
-            break;
-
-        case 'C':                                   // Coolant override
-            serial_putC(CMD_OVERRIDE_COOLANT_FLOOD_TOGGLE);
-            break;
-
-        case 'a':                                   // Lock X-axis DRO for manual MPG sync
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle) {
-                if(!(axis[X_AXIS].dro_lock = !axis[X_AXIS].dro_lock))
-                    axis[X_AXIS].mpg_position = mpg_getPosition()->x.position;
-                displayPosition(X_AXIS);
-            }
-            break;
- 
-        case 'g':                                   // Lock Y-axis DRO for manual MPG sync
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle) {
-                if(!(axis[Y_AXIS].dro_lock = !axis[Y_AXIS].dro_lock))
-                    axis[Y_AXIS].mpg_position = mpg_getPosition()->y.position;
-                displayPosition(Y_AXIS);
-            }
-            break;
- 
-        case 'e':                                   // Lock Z-axis DRO for manual MPG sync
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle) {
-                if(!(axis[Z_AXIS].dro_lock = !axis[Z_AXIS].dro_lock))
-                    axis[Z_AXIS].mpg_position = mpg_getPosition()->z.position;
-                displayPosition(Z_AXIS);
-            }
-            break;
-
-        case 'm':
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle)
-                displayMPGFactor(X_AXIS, ++axis[X_AXIS].mpg_idx);
-            break;
-
-        case 'n':
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle)
-                displayMPGFactor(Y_AXIS, ++axis[Y_AXIS].mpg_idx);
-            break;
-
-        case 'o':
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle)
-                displayMPGFactor(Z_AXIS, ++axis[Z_AXIS].mpg_idx);
-            break;
-
-        case 'A':
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle) {
-                if(grbl_data->useWPos)
-                    axis[X_AXIS].mpg_base = 0.0;
-                serial_writeLn("G90G10L20P0X0");     // Zero X-axis
-            }
-            break;
-
-        case 'G':
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle) {
-                if(grbl_data->useWPos)
-                    axis[Y_AXIS].mpg_base = 0.0;
-                serial_writeLn("G90G10L20P0Y0");     // Zero Y-axis
-            }
-            break;
-
-        case 'E':
-            if(grbl_data->mpgMode && grbl_data->grbl.state == Idle) {
-                if(grbl_data->useWPos)
-                    axis[Z_AXIS].mpg_base = 0.0;
-                serial_writeLn("G90G10L20P0Z0");     // Zero Z-axis
-            }
-            break;
-
-        case CMD_FEED_HOLD_LEGACY:                  //Feed hold
-            if(grbl_data->mpgMode)
-                serial_putC(mapRTC2Legacy(CMD_FEED_HOLD));
-            else {
-                event_count.signal_reset = event_interval.signal_reset;
-                signal_setFeedHold(true);
-            }
-            break;
-
-        case CMD_CYCLE_START_LEGACY:                // Cycle start
-            if(grbl_data->mpgMode)
-                serial_putC(mapRTC2Legacy(CMD_CYCLE_START));
-            else {
-                event_count.signal_reset = event_interval.signal_reset;
-                signal_setCycleStart(true);
-            }
-            break;
-
-        case 'I':
-            serial_putC(CMD_FEED_OVR_RESET);
-            break;
-
-        case 'i':
-            serial_putC(CMD_OVERRIDE_FEED_COARSE_PLUS);
-            break;
-
-        case 'j':
-            serial_putC(CMD_OVERRIDE_FEED_COARSE_MINUS);
-            break;
-
-        case 'K':
-            serial_putC(CMD_OVERRIDE_SPINDLE_RESET);
-            break;
-
-         case 'k':
-            serial_putC(CMD_OVERRIDE_SPINDLE_COARSE_PLUS);
-            break;
-
-        case 'z':
-            serial_putC(CMD_OVERRIDE_SPINDLE_COARSE_MINUS);
-            break;
-
-        case CMD_STOP:
-        case CMD_SAFETY_DOOR:
-        case CMD_OPTIONAL_STOP_TOGGLE:
-        case CMD_SINGLE_BLOCK_TOGGLE:
-        case CMD_PROBE_CONNECTED_TOGGLE:
-        case CMD_OVERRIDE_FAN0_TOGGLE:
-        case CMD_OVERRIDE_COOLANT_FLOOD_TOGGLE:
-        case CMD_OVERRIDE_COOLANT_MIST_TOGGLE:
-        case CMD_OVERRIDE_FEED_COARSE_PLUS:
-        case CMD_OVERRIDE_FEED_COARSE_MINUS:
-        case CMD_OVERRIDE_FEED_FINE_PLUS:
-        case CMD_OVERRIDE_FEED_FINE_MINUS:
-        case CMD_OVERRIDE_RAPID_RESET:
-        case CMD_OVERRIDE_RAPID_MEDIUM:
-        case CMD_OVERRIDE_RAPID_LOW:
-        case CMD_OVERRIDE_SPINDLE_RESET:
-        case CMD_OVERRIDE_SPINDLE_COARSE_PLUS:
-        case CMD_OVERRIDE_SPINDLE_COARSE_MINUS:
-        case CMD_OVERRIDE_SPINDLE_FINE_PLUS:
-        case CMD_OVERRIDE_SPINDLE_FINE_MINUS:
-        case CMD_OVERRIDE_SPINDLE_STOP:
-            serial_putC(keycode);
-            break;
-
-        case 'H':                                   // Home axes
-            if(settings && settings->homing_enabled) {
-                signal_setLimitsOverride(false);
-                strcpy(command, "$H");
-            }
-            break;
-
-        case JOG_XR:                                // Jog X
-            strcpy(command, "$J=G91X?F");
-            break;
-
-        case JOG_XL:                                // Jog -X
-            strcpy(command, "$J=G91X-?F");
-            break;
-
-        case JOG_YF:                                // Jog Y
-            strcpy(command, "$J=G91Y?F");
-            break;
-
-        case JOG_YB:                                // Jog -Y
-            strcpy(command, "$J=G91Y-?F");
-            break;
-
-        case JOG_ZU:                                // Jog Z
-            strcpy(command, "$J=G91Z?F");
-            break;
-
-        case JOG_ZD:                                // Jog -Z
-            strcpy(command, "$J=G91Z-?F");
-            break;
-
-        case JOG_XRYF:                              // Jog XY
-            strcpy(command, "$J=G91X?Y?F");
-            break;
-
-        case JOG_XRYB:                              // Jog X-Y
-            strcpy(command, "$J=G91X?Y-?F");
-            break;
-
-        case JOG_XLYF:                              // Jog -XY
-            strcpy(command, "$J=G91X-?Y?F");
-            break;
-
-        case JOG_XLYB:                              // Jog -X-Y
-            strcpy(command, "$J=G91X-?Y-?F");
-            break;
-
-        case JOG_XRZU:                              // Jog XZ
-            strcpy(command, "$J=G91X?Z?F");
-            break;
-
-        case JOG_XRZD:                              // Jog X-Z
-            strcpy(command, "$J=G91X?Z-?F");
-            break;
-
-        case JOG_XLZU:                              // Jog -XZ
-            strcpy(command, "$J=G91X-?Z?F");
-            break;
-
-        case JOG_XLZD:                              // Jog -X-Z
-            strcpy(command, "$J=G91X-?Z-?F");
-            break;
-    }
-
-    if(command[0] != '\0') {
-
-        // add distance and speed to jog commands
-        if((jogCommand = (command[0] == '$' && command[1] == 'J')))
-            switch(jogMode) {
-
-            case JogMode_Slow:
-                strrepl(command, '?', ftoa(settings->jog_config.slow_distance, "%5.0f"));
-                strcat(command, ftoa(settings->jog_config.slow_speed, "%5.0f"));
-                break;
-
-            case JogMode_Step:
-                strrepl(command, '?', ftoa(settings->jog_config.step_distance, "%5.3f"));
-                strcat(command, ftoa(settings->jog_config.step_speed, "%5.0f"));
-                break;
-
-            default:
-                strrepl(command, '?', ftoa(settings->jog_config.fast_distance, "%5.0f"));
-                strcat(command, ftoa(settings->jog_config.fast_speed, "%5.0f"));
-                break;
-
-        }
-
-        if(!(jogCommand && keyreleased)) { // key still pressed? - do not execute jog command if released!
-            addedGcode = true;
-            serial_writeLn((char *)command);
-            jogging = jogging || (jogCommand && addedGcode);
-        }
-    }
-}
-
 void mpg_ActiveAxisUpdated(uint_fast8_t axis_t)
 {
     for(uint_fast8_t i = 0; i < 3; i++) {
@@ -664,16 +372,6 @@ void mpg_ActiveAxisUpdated(uint_fast8_t axis_t)
                     UILibLabelDisplay(axis[i].lblAxis, axis[i].label);
                 }
             }
-}
-void keyEvent (bool keyDown, char key)
-{
-    // NOTE: key is read from input buffer during event processing
-    if(keyDown)
-        event |= EVENT_KEYDOWN;
-    else
-        event |= EVENT_KEYUP;
-
-    keyreleased = !keyDown;
 }
 
 void jogModeChanged (jogmode_t mode)
@@ -699,10 +397,9 @@ static void on_settings_received (settings_t *setn)
         }
     }
 
-    displayBanner(grbl_data->mpgMode ? (settings->is_loaded ? Blue : Red) : White);
-
-//    if(grbl_data->mpgMode) // Get parser state
-//        serial_writeLn("$G");
+    displayBanner(grbl_data->mpgMode ? (settings->is_loaded ? Blue : Yellow) : Red);
+    lblUnit->widget.fgColor = settings->jog_config.report_inches ? Coral : White;
+    UILibLabelDisplay(lblUnit, settings->jog_config.report_inches? "In": "mm");
 }
 
 static void on_info_received (grbl_info_t *info)
@@ -728,10 +425,6 @@ static void displayGrblData (char *line)
         if(grbl_data->changed.state) {
             lblGrblState->widget.fgColor = grbl_data->grbl.state_color;
             UILibLabelDisplay(lblGrblState, grbl_data->grbl.state_text);
-            leds.run = grbl_data->grbl.state == Run || grbl_data->grbl.state == Jog;
-            leds.hold = grbl_data->grbl.state == Hold;
-            leds_setState(leds);
-
             switch(grbl_data->grbl.state) {
 
                 case Idle:
@@ -769,10 +462,11 @@ static void displayGrblData (char *line)
              UILibLabelDisplay(lblResponseL, grbl_data->message);
 
         if(grbl_data->changed.offset || grbl_data->changed.await_wco_ok) {
-            if((mpgReset || grbl_data->changed.await_wco_ok) && grbl_data->grbl.state == Idle) {
+            if((mpgReset || grbl_data->changed.await_wco_ok) && grbl_data->grbl.state == Idle)
+             {
                 mpgReset = false;
                 MPG_ResetPosition(false);
-            }
+            }  
             grbl_data->changed.xpos =
             grbl_data->changed.ypos =
             grbl_data->changed.zpos = true;
@@ -792,18 +486,21 @@ static void displayGrblData (char *line)
             endMove = false;
         }
 
-        if(grbl_data->changed.mpg) {
-            if(grbl_data->mpgMode != signal_getMPGMode())
-                signal_setMPGMode(grbl_data->mpgMode);
-            keypad_forward(!grbl_data->mpgMode);
-            if(grbl_data->mpgMode) {
+        if(grbl_data->changed.mpg) 
+        {
+             lblDevice->widget.fgColor = (grbl_data->mpgMode ? (settings->is_loaded ? Blue : Yellow) : Red);
+             UILibLabelDisplay(lblDevice,"grbHAL MPG");
+            if(grbl_data->mpgMode) 
+            {
                 if(grbl_info->is_loaded)
                     grblAwaitACK("$G", 50);
                 MPG_ResetPosition(true);
                 displayMPGFactor(X_AXIS, axis[X_AXIS].mpg_idx);
                 displayMPGFactor(Y_AXIS, axis[Y_AXIS].mpg_idx);
                 displayMPGFactor(Z_AXIS, axis[Z_AXIS].mpg_idx);
-            } else {
+            } 
+            else 
+            {
                 c = 3;
                 do {
                     if(axis[--c].dro_lock) {
@@ -811,18 +508,15 @@ static void displayGrblData (char *line)
                         displayPosition(c);
                     }
                     setMPGFactorBG(c, Black);
-                } while(c);                
+                }
+                 while(c);                
 #ifdef UART_MODE
                 if(jogModePending) {
                     jogModePending = false;
                     serial_putC('0' + (char)jogMode);
                 }
 #endif
-            }
-
-            leds.mode = grbl_data->mpgMode;
-            leds_setState(leds);
-            displayBanner(grbl_data->mpgMode ? (settings->is_loaded ? Blue : Red) : White);
+           }
         }
 
         if(grbl_data->changed.feed) {
@@ -841,15 +535,9 @@ static void displayGrblData (char *line)
             }
         }
 
-        if(grbl_data->changed.leds) {
-            leds.mist = grbl_data->coolant.mist;
-            leds.flood = grbl_data->coolant.flood;
-            leds.spindle = grbl_data->spindle.on;
-            leds_setState(leds);
-        }
 
-        if(grbl_data->changed.pins)
-            UILibLabelDisplay(lblPinState, grbl_data->pins);
+        // if(grbl_data->changed.pins)
+        //     UILibLabelDisplay(lblPinState, grbl_data->pins);
 
         if(grbl_data->changed.xmode && isLathe)
             displayXMode(grbl_data->xModeDiameter ? "D" : "R");
@@ -871,37 +559,15 @@ void DROProcessEvents (void)
     if(!active)
         return;
 
-    if(event) {
-
-        if(event & EVENT_KEYUP) {
-            event &= ~EVENT_KEYUP;
-            if(jogging) {
-             //   keypad_flush();
-                jogging = false;
-                mpgReset = true;
-                serial_putC(CMD_JOG_CANCEL);
-            }
-            if(disableMPG) {
-                disableMPG = false;
-                MPG_ResetPosition(false);
-            }
-        }
-
-        if(event & EVENT_KEYDOWN) {
-            processKeypress();
-            if(!keypad_has_keycode())
-                event &= ~EVENT_KEYDOWN;
-        }
-
-        if(event & EVENT_MPG) {
+    if(event) 
+    {
+        if(event & EVENT_MPG) 
+        {
             event &= ~EVENT_MPG;
             if(MPG_Move())
                 mpgMove = true;
-            else if(mpgMove) {
-                if(leds.run && grbl_data->grbl.state == Idle) {
-                    leds.run = false;
-                    leds_setState(leds);
-                }
+            else if(mpgMove)
+             {
                 endMove = true;
                 mpgMove = false;
             }
@@ -920,8 +586,6 @@ void DROProcessEvents (void)
 
         if(event & EVENT_SIGNALS) {
             event &= ~EVENT_SIGNALS;
-            signal_setCycleStart(false);
-            signal_setFeedHold(false);
         }
     }
 }
@@ -1007,6 +671,7 @@ static void canvasHandler (Widget *self, Event *uievent)
                         }
                     }
                 }
+             
                 NavigatorSetPosition(0, nav_midpos, false);
             }
             break;
@@ -1016,7 +681,7 @@ static void canvasHandler (Widget *self, Event *uievent)
             event = 0;
             isReady = false;
             setBackgroundColor(canvasMain->widget.bgColor);
-            grbl_data = setGrblReceiveCallback(displayGrblData);
+            
             for(uint_fast8_t i = 0; i < 3; i++) {
                 if(axis[i].visible) {
                     axis[i].lblAxis->widget.fgColor = i == mpg_axis ? Green : White;
@@ -1033,6 +698,9 @@ static void canvasHandler (Widget *self, Event *uievent)
             UILibLabelDisplay(lblRPM, rpm);
             drawString(font_23x16, 220, RPMROW - 3, "Jog:", false);
             drawString(font_23x16, 87, STATUSROW, "Feed:", true);
+            lblDevice->widget.fgColor = (grbl_data->mpgMode ? (settings->is_loaded ? Blue : Yellow) : Red);
+             UILibLabelDisplay(lblDevice,"grbHAL MPG");
+        
             setJogModeChangedCallback(jogModeChanged);
             if(grbl_data->mpgMode) {
                 displayMPGFactor(X_AXIS, axis[X_AXIS].mpg_idx);
@@ -1040,10 +708,6 @@ static void canvasHandler (Widget *self, Event *uievent)
                 displayMPGFactor(Z_AXIS, axis[Z_AXIS].mpg_idx);
             }
             mpgReset = true;
-            leds = leds_getState();
-            keypad_forward(!grbl_data->mpgMode);
-            setKeyclickCallback2(keyEvent, false);
-            NavigatorSetPosition(0, nav_midpos, false);
 //            serial_putC(CMD_STATUS_REPORT_ALL); // Request realtime status from grbl
             active = true;
             break;
@@ -1056,20 +720,14 @@ static void canvasHandler (Widget *self, Event *uievent)
             active = false;
             break;
     }
+   
 }
 
 void DROInitCanvas (void)
 {
     int_fast8_t i;
-
     delay(1);
-    signal_setMPGMode(true); // default is MPG on
-
     serial_init();
-
-//    RPM_Init();
-    keypad_setup();
-
     driver_settings_restore(1);
 
     memset(&axis, 0, sizeof(axis));
@@ -1115,6 +773,7 @@ void DROShowCanvas (lcd_display_t *lcd_screen)
 
         lblDevice = UILibLabelCreate((Widget *)canvasMain, font_23x16, White, 2, 20, screen->Width - 4, NULL);
         lblDevice->widget.flags.alignment = Align_Center;
+        displayBanner(grbl_data->mpgMode ? (settings->is_loaded ? Blue : Yellow) : Red);
 
         for(i = 0; i < 3; i++) {
             if(axis[i].visible) {
@@ -1124,6 +783,7 @@ void DROShowCanvas (lcd_display_t *lcd_screen)
         }
 
         lblRPM = UILibLabelCreate((Widget *)canvasMain, font_freepixel_17x34, White, 60, RPMROW, 100, NULL);
+        lblUnit = UILibLabelCreate((Widget *)canvasMain, font_23x16, White, 269, STATUSROW,65,NULL);
         lblJogMode = UILibLabelCreate((Widget *)canvasMain, font_23x16, White, 265, RPMROW - 3, 53, NULL);
         lblGrblState = UILibLabelCreate((Widget *)canvasMain, font_23x16, White, 5, STATUSROW, 80, NULL);
         lblFeedRate = UILibLabelCreate((Widget *)canvasMain, font_23x16, White, 145, STATUSROW, 65, NULL);
@@ -1132,20 +792,16 @@ void DROShowCanvas (lcd_display_t *lcd_screen)
         lblResponseL = UILibLabelCreate((Widget *)canvasMain, font_freepixel_9x17, White, 5, MSGROW, 200, NULL);
         lblResponseR = UILibLabelCreate((Widget *)canvasMain, font_23x16, Red, 210, MSGROW, 108, NULL);
         lblResponseR->widget.flags.alignment = Align_Right;
+         
     }
 
     // reset event counters
     event_count.dro_refresh = event_interval.dro_refresh;
     event_count.mpg_refresh = event_interval.mpg_refresh;
     event_count.signal_reset = 0;
-
-    if(grbl_data)
-        signal_setMPGMode(grbl_data->mpgMode);
-
-    if(grbl_info == NULL)
-        grblGetInfo(on_info_received);
-
-    leds_setState(leds);
-
-    UILibCanvasDisplay(canvasMain);
+   
+    grbl_data = setGrblReceiveCallback(displayGrblData);
+    serial_putC(CMD_STATUS_REPORT_ALL);
+     UILibCanvasDisplay(canvasMain);
+    
 }

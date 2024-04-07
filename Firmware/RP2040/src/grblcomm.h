@@ -180,6 +180,7 @@ typedef struct {
     float fast_distance;
     float slow_distance;
     float step_distance;
+    bool report_inches;
 } jog_config_t;
 
 typedef struct {

@@ -59,9 +59,7 @@ static leds_t leds_state = {
     .value = 255
 };
 static bool keyDown = false;
-static void encoder_int_handler (void);
 static void mpg_int_handler (void);
-static void keyclick_int_handler (uint gpio, uint32_t events);
 static void mpgMode_sw_int_handler (uint gpio, uint32_t events);
 static void axis_toggle_int_handler (uint gpio, uint32_t events);
 static void jog_rate_int_handler (uint gpio, uint32_t events);
@@ -89,31 +87,13 @@ static const uint8_t MICROSTEP_1  = 0b10;
 static const uint8_t MICROSTEP_2  = 0b11;
 static const uint8_t MICROSTEP_3  = 0b01;
 
-#define SHIFT_KEY 0b1000010000
-
-static const keypad_key_t kmap[] = {
-    { .key = CMD_STOP, .type = Keytype_SingleEvent, .scanCode = SHIFT_KEY|0b0100000001 }
-/*    { .key = '4', .type = Keytype_SingleEvent, .scanCode = SHIFT_KEY|0b0100000001 },
-    { .key = '5', .type = Keytype_SingleEvent, .scanCode = SHIFT_KEY|0b0100000010 },
-    { .key = '6', .type = Keytype_SingleEvent, .scanCode = SHIFT_KEY|0b0100000100 } */
-};
-
 void hal_init (void)
 {
     int offset;
 
     mpg_axis = &mpg.x;
 
-    gpio_init(SWD_RESET);
-    gpio_set_dir(SWD_RESET, GPIO_OUT);
-    gpio_put(SWD_RESET, 0); // Halt MSP430 keypad controller
-
-    i2c_nb_init();
-
-    gpio_pull_up(KEYINTR_PIN);
-    gpio_set_irq_enabled_with_callback(KEYINTR_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, gpio_int_handler);
-
-    gpio_set_irq_enabled_with_callback(MPGMODE_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, gpio_int_handler);
+    gpio_set_irq_enabled_with_callback(MPGMODE_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, gpio_int_handler);
     gpio_pull_up(MPGMODE_SW_PIN);
     gpio_set_irq_enabled(MPGMODE_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
 
@@ -131,28 +111,7 @@ void hal_init (void)
     gpio_set_pulls(KEYFWD_PIN, false, false);
     gpio_put(KEYFWD_PIN, 0); // > to OD
 
-    gpio_init(CYCLESTART_PIN);
-    gpio_set_dir(CYCLESTART_PIN, GPIO_OUT);
-    gpio_set_oeover(CYCLESTART_PIN, GPIO_OVERRIDE_LOW); // > to OD
-    gpio_put(CYCLESTART_PIN, 0);
 
-    gpio_init(FEEDHOLD_PIN);
-    gpio_set_dir(FEEDHOLD_PIN, GPIO_OUT);
-    gpio_set_oeover(FEEDHOLD_PIN, GPIO_OVERRIDE_LOW); // > to OD
-    gpio_put(FEEDHOLD_PIN, 0); // > to OD
-
-    gpio_init(MPG_MODE_PIN);
-
-    enc_sm = pio_claim_unused_sm(pio0, true);
-    uint pio_idx = pio_get_index(pio0);
-
-    offset = pio_add_program(pio0, &encoder_program);
-    encoder_program_init(pio0, enc_sm, offset, NAVIGATOR_A, NAVIGATOR_B, 250);
-    hw_set_bits(&pio0->inte0, PIO_IRQ0_INTE_SM0_RXNEMPTY_BITS << enc_sm);
-    encoder_program_start(pio0, enc_sm, gpio_get(NAVIGATOR_A), gpio_get(NAVIGATOR_B));
-
-    irq_set_exclusive_handler(PIO0_IRQ_0, encoder_int_handler);
-    irq_set_enabled(PIO0_IRQ_0, true);
 
     mpg_sm = pio_claim_unused_sm(pio1, true);
     offset = pio_add_program(pio1, &encoder_program);
@@ -164,35 +123,19 @@ void hal_init (void)
     irq_set_enabled(PIO1_IRQ_0, true);
 
  // Boot MSP430 keypad controller (the RP2040 does not support open drain outputs?)
-    gpio_set_pulls(SWD_RESET, false, false);
-    gpio_set_dir(SWD_RESET, GPIO_IN);
-    delay(5); // Wait for keypad controller startup
+    // gpio_set_pulls(SWD_RESET, false, false);
+    // gpio_set_dir(SWD_RESET, GPIO_IN);
+    // delay(5); // Wait for keypad controller startup
 
- // Select a different key mapping than the default
- //   uint8_t map[] = {0, 3};
- //   i2c_nb_send_n(KEYPAD_I2CADDR, map, sizeof(map));
-
- // Add any additional key mappings to keypad controller
-    for(offset = 0; offset < sizeof(kmap) / sizeof(keypad_key_t); offset++)
-        i2c_nb_send_n(KEYPAD_I2CADDR, (uint8_t *)&kmap[offset], sizeof(keypad_key_t));
   }
 
-bool keypad_isKeydown (void)
-{
-    return keyDown;
-}
-
-void keypad_setFwd (bool on)
-{
-    gpio_set_oeover(KEYFWD_PIN, on ? GPIO_OVERRIDE_HIGH : GPIO_OVERRIDE_LOW);
-}
 
 void leds_setState (leds_t leds)
 {
-    if(leds_state.value != leds.value) {
-        leds_state.value = leds.value;
-        i2c_nb_send(KEYPAD_I2CADDR, leds.value);
-    }
+    // if(leds_state.value != leds.value) {
+    //     leds_state.value = leds.value;
+    //     i2c_nb_send(KEYPAD_I2CADDR, leds.value);
+    // }
 }
 
 leds_t leds_getState (void)
@@ -210,30 +153,30 @@ void signal_setFeedHold (bool on)
 
 void signal_setCycleStart (bool on)
 {
-    if(on)
-        gpio_set_oeover(FEEDHOLD_PIN, GPIO_OVERRIDE_LOW);
+    // if(on)
+    //     gpio_set_oeover(FEEDHOLD_PIN, GPIO_OVERRIDE_LOW);
 
-    gpio_set_oeover(CYCLESTART_PIN, on ? GPIO_OVERRIDE_HIGH : GPIO_OVERRIDE_LOW);
+    // gpio_set_oeover(CYCLESTART_PIN, on ? GPIO_OVERRIDE_HIGH : GPIO_OVERRIDE_LOW);
 }
 
 void signal_setMPGMode (bool on)
 {
-    static bool initOk = false;
+    // static bool initOk = false;
 
-    if(!initOk) {
-        initOk = true;
-        gpio_set_dir(MPG_MODE_PIN, GPIO_OUT);
-        gpio_set_pulls(MPG_MODE_PIN, false, false);
-        gpio_set_oeover(MPG_MODE_PIN, GPIO_OVERRIDE_LOW); // > to OD
-        gpio_put(MPG_MODE_PIN, 0);
-    }
+    // if(!initOk) {
+    //     initOk = true;
+    //     gpio_set_dir(MPG_MODE_PIN, GPIO_OUT);
+    //     gpio_set_pulls(MPG_MODE_PIN, false, false);
+    //     gpio_set_oeover(MPG_MODE_PIN, GPIO_OVERRIDE_LOW); // > to OD
+    //     gpio_put(MPG_MODE_PIN, 0);
+    // }
 
-    // If last mode change request was not honoured then output a 1us pulse to reset
-    // grbl interrupt that may have become out of sync.
-    if(gpio_get(MPG_MODE_PIN) == on) {
-        gpio_set_oeover(MPG_MODE_PIN, on ? GPIO_OVERRIDE_HIGH : GPIO_OVERRIDE_LOW);
-        sleep_us(1);
-    }
+    // // If last mode change request was not honoured then output a 1us pulse to reset
+    // // grbl interrupt that may have become out of sync.
+    // if(gpio_get(MPG_MODE_PIN) == on) {
+    //     gpio_set_oeover(MPG_MODE_PIN, on ? GPIO_OVERRIDE_HIGH : GPIO_OVERRIDE_LOW);
+    //     sleep_us(1);
+    //}
 }
 
 bool signal_getMPGMode (void)
@@ -320,14 +263,6 @@ static void gpio_int_handler (uint gpio, uint32_t events)
 {
     switch(gpio) {
 
-        case KEYINTR_PIN:
-            keyclick_int_handler(gpio, events);
-            break;
-
-        // case NAVIGATOR_SW_PIN:
-        //     nav_sw_int_handler(gpio, events);
-        //     break;
-
         case MPGMODE_SW_PIN:
             mpgMode_sw_int_handler(gpio, events);
             break;
@@ -346,35 +281,6 @@ static void gpio_int_handler (uint gpio, uint32_t events)
 
 }
 
-static void keyclick_int_handler (uint gpio, uint32_t events)
-{
-    if(events & (GPIO_IRQ_EDGE_FALL|GPIO_IRQ_EDGE_RISE)) {
-        if(gpio_get(KEYINTR_PIN) == 0) {
-            keyDown = true;
-            i2c_getSWKeycode(keypad_enqueue_keycode);
-        } else {
-            if(keypad_release()) {
-                keypad_setFwd(false);
-                if(!keypad_forward_queue_is_empty()) {
-                    sleep_us(50);
-                    keypad_setFwd(true);
-                }
-            } else if(interface.on_keyclick2)
-                interface.on_keyclick2(false, 0); // fire key up event
-            keyDown = false;
-        }
-    }
-}
-
-// static int64_t debounce_callback (alarm_id_t id, void *state)
-// {
-//     if(interface.on_navigator_event && gpio_get(NAVIGATOR_SW_PIN) == *(bool *)state)
-//         interface.on_navigator_event(gpio_get(NAVIGATOR_SW_PIN) ? WIDGET_MSG_PTR_UP : WIDGET_MSG_PTR_DOWN, qei_xPos, qei.count);
-
-//     gpio_set_irq_enabled(NAVIGATOR_SW_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
-
-//     return 0;
-// }
 static int64_t debounceMode_callback (alarm_id_t id, void *pin)
 {
     gpio_set_irq_enabled(*(uint *)pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
@@ -384,42 +290,27 @@ static int64_t debounceMode_callback (alarm_id_t id, void *pin)
 
 static void mpgMode_sw_int_handler (uint gpio, uint32_t events)
 {
-    static bool state;
-    state = events == GPIO_IRQ_EDGE_RISE ;
-    static uint pin;
-    pin = gpio;
-    if(!state)
+   
+    if (!gpio_get(gpio))
     {
-         serial_putC(CMD_MPG_MODE_TOGGLE);
+          serial_putC(CMD_MPG_MODE_TOGGLE);
     }
     
-    gpio_set_irq_enabled(MPGMODE_SW_PIN,  GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
-    add_alarm_in_ms(40, debounceMode_callback, &pin, false);
 }
-
 static void jog_rate_int_handler (uint gpio, uint32_t events)
 {
-    static bool state;
-    state = events == GPIO_IRQ_EDGE_RISE ;
-    static uint pin;
-    pin = gpio;
 
-    if(!state)
+    if (!gpio_get(gpio))
     {
-        current = current == Maxium ? 0 : current + 1;
-       mpg_JogRateToggle(current);
+         current = current == Maxium ? 0 : current + 1;
+         mpg_JogRateToggle(current);
     }
-    gpio_set_irq_enabled(JOG_RATE_PIN,  GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
-    add_alarm_in_ms(40, debounceMode_callback, &pin, false);
+   
 }
 
 static void axis_toggle_int_handler (uint gpio, uint32_t events)
 {
-     static bool state;
-    state = events == GPIO_IRQ_EDGE_RISE ;
-    static uint pin;
-    pin = gpio;
-    if(!state)
+    if (!gpio_get(gpio))
     {
         if(mpg_axis  == &mpg.x)
         {
@@ -433,48 +324,13 @@ static void axis_toggle_int_handler (uint gpio, uint32_t events)
         mpg_setActiveAxis(0);
         }
     }
-    gpio_set_irq_enabled(AXIS_TOGGLE_PIN,  GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
-    add_alarm_in_ms(40, debounceMode_callback, &pin, false);
 }
 
 
 
 const uint8_t encoder_valid_state[] = {0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
 
-static void encoder_int_handler (void)
-{
-    uint32_t received, idx;
-    qei_state_t state = {0};
 
-    while(pio0->ints0 & (PIO_IRQ0_INTS_SM0_RXNEMPTY_BITS << enc_sm)) {
-
-        received = pio_sm_get(pio0, enc_sm);
-
-        state.a = !!(received & STATE_A_MASK);
-        state.b = !!(received & STATE_B_MASK);
-
-        idx = (((qei.state << 2) & 0x0F) | state.pins);
-
-        if(encoder_valid_state[idx]) {
-
-            qei.state = ((qei.state << 4) | idx) & 0xFF;
-
-            if (qei.state == 0x42 || qei.state == 0xD4 || qei.state == 0x2B || qei.state == 0xBD) {
-                if(qei.count > 0) {
-                    qei.count--;
-                    if(interface.on_navigator_event)
-                        interface.on_navigator_event(WIDGET_MSG_PTR_MOVE, qei_xPos, qei.count);
-                }
-            } else if(qei.state == 0x81 || qei.state == 0x17 || qei.state == 0xE8 || qei.state == 0x7E) {
-                if(qei.count < ymax) {
-                    qei.count++;
-                    if(interface.on_navigator_event)
-                        interface.on_navigator_event(WIDGET_MSG_PTR_MOVE, qei_xPos, qei.count);
-                }
-            }
-        }
-    }
-}
 
 static void mpg_int_handler (void)
 {
@@ -518,7 +374,10 @@ static void mpg_int_handler (void)
                 mpg_axis->position = qei_mpg.count;
                 mpg_axis->velocity = 100;
                 if(interface.on_mpgChanged)
-                    interface.on_mpgChanged(mpg);
+                {
+                        interface.on_mpgChanged(mpg);
+                }
+                   
             }
         }
     }

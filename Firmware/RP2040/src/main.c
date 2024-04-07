@@ -49,19 +49,22 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "canvas/boot.h"
 #include "canvas/dro.h"
 
+
+
+
 void main (void)
 {
+
     lcd_display_t *screen;
-
+   
     initGraphics();
-
     hal_init();
 
     setOrientation(Orientation_Horizontal);
     UILibInit();
     UILibSetTabnav(6);
 
-//    TOUCH_Calibrate();
+    //TOUCH_Calibrate();
 
     clearScreen(true);
 
@@ -75,8 +78,10 @@ void main (void)
     DROShowCanvas(screen);
 
     while(true) {
+
         grblPollSerial();
         DROProcessEvents();
         UILibProcessEvents();
     }
+
 }

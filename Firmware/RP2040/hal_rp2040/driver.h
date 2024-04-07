@@ -63,7 +63,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define SLAVE_SCL_PIN       9
 #define SLAVE_SDA_PIN       8
 #define MPGMODE_SW_PIN      6
-#define KEYINTR_PIN         5
+#define KEYINTR_PIN         5 //need this 
 #define SPINDLEDIR_PIN      4 // GPIO0 / Touch IRQ
 #define MPG_MODE_PIN        3 // GPIO1
 #define KEYFWD_PIN          2 // GPIO2

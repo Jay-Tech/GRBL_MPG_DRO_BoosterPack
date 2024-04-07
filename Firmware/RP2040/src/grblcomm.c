@@ -118,7 +118,8 @@ settings_t settings = {
     .jog_config.fast_speed    = 3000.0f,
     .jog_config.step_distance = 0.1f,
     .jog_config.slow_distance = 500.0f,
-    .jog_config.fast_distance = 500.0f
+    .jog_config.fast_distance = 500.0f,
+    .jog_config.report_inches = 0,
 };
 
 static grbl_info_t grbl_info = {
@@ -377,8 +378,11 @@ static void parseData (char *block)
                 }
                 parsePositions(line + 5);
 
-            } else if(!strncmp(line, "MPos:", 5)) {
-                if(grbl_data.useWPos) {
+            } 
+            else if(!strncmp(line, "MPos:", 5)) 
+            {
+                if(grbl_data.useWPos) 
+                {
                     grbl_data.useWPos = false;
                     grbl_data.changed.offset = true;
                 }
@@ -434,8 +438,10 @@ static void parseData (char *block)
             } else if(!strncmp(line, "Ov:", 3))
                 parseOverrides(line + 3);
 
-            else if(!strncmp(line, "MPG:", 4)) {
-                if(grbl_data.mpgMode != (line[4] == '1')) {
+            else if(!strncmp(line, "MPG:", 4)) 
+            {
+                if(grbl_data.mpgMode != (line[4] == '1'))
+                 {
                     grbl_data.mpgMode = !grbl_data.mpgMode;
                     grbl_data.changed.mpg = true;
                     grbl_event.on_line_received = parseData;
@@ -661,7 +667,9 @@ static void parse_settings (char *line)
             grbl_event.on_settings_received(&settings);
             grbl_event.on_settings_received = NULL;
         }
-    } else if(line[0] == '$' && strchr(line, '=')) {
+    } 
+    else if(line[0] == '$' && strchr(line, '=')) 
+    {
 
         line = strtok(&line[1], "=");
         setting = atoi(line);
@@ -672,6 +680,10 @@ static void parse_settings (char *line)
 
             case Setting_JogStepSpeed:
                 settings.jog_config.step_speed = value;
+                break;
+
+            case Setting_ReportInches:
+                settings.jog_config.report_inches =  ((uint32_t)value & 0x01) != 0;
                 break;
 
             case Setting_JogSlowSpeed:
@@ -729,8 +741,10 @@ void grblGetSettings (grbl_settings_received_ptr on_settings_received)
         serial_RxCancel();
         serial_writeLn("$$");
     } else if (on_settings_received)
-        on_settings_received(&settings); // return default values
+        on_settings_received(&settings); 
 }
+
+
 
 static void parse_sd_files (char *line)
 {
